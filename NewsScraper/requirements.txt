@@ -1,0 +1,8 @@
+pandas
+requests
+google-cloud-storage
+newspaper3k
+beautifulsoup4
+lxml
+lxml_html_clean
+nltk
