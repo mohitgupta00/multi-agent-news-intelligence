@@ -1,0 +1,49 @@
+# ----------------------
+# Python cache & artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+
+# ----------------------
+# Virtual environments
+.venv/
+env/
+venv/
+
+# ----------------------
+# Jupyter Notebook
+.ipynb_checkpoints/
+# Uncomment the line below if you don’t want to track notebooks at all
+# *.ipynb
+
+# ----------------------
+# Project-generated folders & files
+data/
+output/
+outputs/
+results/
+scraped_data/
+news_data/
+logs/
+cache/
+*.db
+*.sqlite3
+*.json
+*.csv
+
+# ----------------------
+# Sensitive configuration
+.env
+*.env
+config.yaml
+config.yml
+secrets.json
+
+# ----------------------
+# OS / Editor specific
+.DS_Store
+.vscode/
+.idea/
