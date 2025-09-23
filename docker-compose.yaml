@@ -1,41 +1,26 @@
 version: '3.8'
 
 services:
-  news-scraper:
+  jobs:
     build:
-      context: ./NewsAgentData/NewsScraper
-      dockerfile: Dockerfile
-    container_name: news-scraper
+      context: .
+      dockerfile: Dockerfile.jobs
+    container_name: news-jobs
     env_file:
       - .env
     environment:
       - NEWSDATA_API_KEY=${NEWSDATA_API_KEY}
-      - GCS_BUCKET=${GCS_BUCKET}
-      - GCS_PREFIX=${GCS_PREFIX:-news_data}
-    command: ["./scraper.py"]
-    restart: "no"
-
-  data-processor:
-    build:
-      context: ./NewsAgentData/NewsDataProcessor
-      dockerfile: Dockerfile
-    container_name: data-processor
-    env_file:
-      - .env
-    environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GCS_BUCKET=${GCS_BUCKET}
       - GCS_PREFIX=${GCS_PREFIX:-news_data}
-    command: ["python3", "main.py"]
-    depends_on:
-      - news-scraper
+    entrypoint: ["bash", "run-jobs.sh"]
     restart: "no"
 
   dashboard:
     build:
       context: ./NewsAgent
       dockerfile: Dockerfile
-    container_name: dashboard
+    container_name: news-dashboard
     env_file:
       - .env
     environment:
@@ -43,12 +28,7 @@ services:
       - GCS_BUCKET=${GCS_BUCKET}
     ports:
       - "8080:8080"
-    command: ["bash", "deploy.sh"]
+    command: ["bash", "NewsAgent/deploy.sh"]
     depends_on:
-      - data-processor
+      - jobs
     restart: unless-stopped
-
-# NOTE: This setup will build and run the scraping job first,
-# then the data processing job, and finally deploy the dashboard.
-# Depending on the volume of data and model initialization,
-# full processing and deployment may take up to 3-4 hours.
