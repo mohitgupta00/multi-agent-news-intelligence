@@ -90,25 +90,8 @@ The system separates concerns into specialized agents rather than using a monoli
 
 ## Usage
 
-Visit the [deployed system](https://news-intelligence-api-1062778057195.us-central1.run.app/) or use the API endpoints:
+Visit the [deployed system](https://news-intelligence-api-1062778057195.us-central1.run.app/) 
 
-### Search for News
-```bash
-curl -X POST "https://news-intelligence-api-1062778057195.us-central1.run.app/api/query" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "artificial intelligence developments", "max_results": 5}'
-```
-
-### Get Trending Topics  
-```bash
-# All trending news
-curl "https://news-intelligence-api-1062778057195.us-central1.run.app/api/trending"
-
-# India technology news
-curl "https://news-intelligence-api-1062778057195.us-central1.run.app/api/trending/India/technology"
-```
-
----
 
 ## Running Locally
 
