@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROJECT_ID="news-471020" # Replace with your project ID
+PROJECT_ID="project-id" # Replace with your project ID
 JOB_NAME="news-data-processor"
 REGION="us-central1"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${JOB_NAME}"

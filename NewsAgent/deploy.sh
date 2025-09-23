@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # Configuration
-PROJECT_ID="news-471020"
+PROJECT_ID="project-id"
 SERVICE_NAME="news-intelligence-api"
 REGION="us-central1"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 
 # --- Hardcoded environment variables to ensure they are passed to Cloud Run ---
 # This is the most reliable way to fix the environment issue in this context.
-API_KEY="AIzaSyCZELmN8Re-v2eMaVRHROKguyjEYpSU9hY"
-BUCKET_NAME="news-hub"
-DATA_PREFIX="news_data"
+API_KEY="api-key"
+BUCKET_NAME="bucket-name"
+DATA_PREFIX="data-prefix"
 
 echo "🚀 Deploying Multi-Agent News Intelligence to Cloud Run"
 echo "=================================================="
