@@ -2,102 +2,132 @@ import pandas as pd
 import numpy as np
 import faiss
 import os
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from .base_agent import BaseAgent, AgentResponse
+from google.cloud import storage
+from sentence_transformers import SentenceTransformer
 
 class SearchAgent(BaseAgent):
+    """
+    An agent that performs semantic search over the indexed news articles
+    stored in Google Cloud Storage.
+    """
     def __init__(self):
         super().__init__("SearchAgent")
-        self.local_index = None
-        self.global_index = None
-        self.local_meta = None
-        self.global_meta = None
+        self.gcs_bucket = os.getenv("GCS_BUCKET", "news-hub")
+        self.index = None
+        self.meta = None
+
+        # Use the public HuggingFace path for local testing and the local path for Docker.
+        model_path = 'sentence-transformers/all-MiniLM-L6-v2'
+        local_model_dir = 'all-MiniLM-L6-v2-local'
+        if os.path.exists(local_model_dir):
+            model_path = local_model_dir
+
+        try:
+            self.log_activity(f"📥 Loading sentence transformer model: {model_path}...")
+            self.embedder = SentenceTransformer(model_path)
+            self.log_activity("✅ Sentence transformer loaded.")
+        except Exception as e:
+            self.log_activity(f"❌ CRITICAL: Failed to load sentence transformer model: {e}")
+            self.embedder = None # Ensure embedder is None on failure
+
         self._load_indices()
 
     def _load_indices(self):
-        self.log_activity("🔍 Searching for news indices...")
+        if self.index is not None and self.meta is not None:
+            self.log_activity("✅ Index and metadata already loaded.")
+            return
 
-        for days_back in range(10):
-            date_str = (datetime.today() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        if not self.embedder:
+            self.log_activity("⚠️ Cannot load indices because embedder is not available.")
+            return
 
-            try:
-                for scope in ['local', 'global']:
-                    faiss_path = f"/content/NewsAgent/artifacts/{date_str}/{scope}.faiss"
-                    meta_path = f"/content/NewsAgent/artifacts/{date_str}/{scope}_meta.parquet"
+        self.log_activity("🔍 Searching for latest news index in GCS...")
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(self.gcs_bucket)
 
-                    if os.path.exists(faiss_path) and os.path.exists(meta_path):
-                        if scope == 'local':
-                            self.local_index = faiss.read_index(faiss_path)
-                            self.local_meta = pd.read_parquet(meta_path)
-                        else:
-                            self.global_index = faiss.read_index(faiss_path)
-                            self.global_meta = pd.read_parquet(meta_path)
+            for days_back in range(3):
+                date_str = (datetime.utcnow().date() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                index_path = f"full_dataset/{date_str}/faiss_index.index"
+                meta_path = f"full_dataset/{date_str}/metadata.json"
 
-                        self.log_activity(f"✅ Loaded {scope} data from {date_str}")
+                index_blob = bucket.blob(index_path)
+                meta_blob = bucket.blob(meta_path)
 
-            except Exception as e:
-                continue
+                if index_blob.exists() and meta_blob.exists():
+                    self.log_activity(f"✅ Found dataset for {date_str}. Downloading...")
 
-        if not self.local_index and not self.global_index:
-            self.log_activity("❌ No news indices found! Run data pipeline first.")
+                    local_index_path = "/tmp/agent_faiss_index.index"
+                    index_blob.download_to_filename(local_index_path)
+                    self.index = faiss.read_index(local_index_path)
+
+                    meta_content = meta_blob.download_as_string()
+                    self.meta = pd.DataFrame(json.loads(meta_content).get('articles', []))
+
+                    self.log_activity(f"✅ Index loaded with {self.index.ntotal} vectors and {len(self.meta)} articles.")
+                    if 'url' not in self.meta.columns:
+                        self.log_activity("⚠️ 'url' column is missing from the metadata. Links in search results will not work.")
+                    return
+
+            self.log_activity("⚠️ No recent news index found in GCS. Search will be unavailable until the job runs.")
+        except Exception as e:
+            self.log_activity(f"❌ Failed during index loading: {e}. Search will be unavailable.")
+            self.index = None
+            self.meta = None
 
     async def execute(self, task: Dict[str, Any]) -> AgentResponse:
         query = task.get('query', '').strip()
-        scope = task.get('scope', 'both').lower()
         top_k = task.get('top_k', 5)
 
         if not query:
-            return self.create_response(
-                success=False,
-                data={},
-                message="❌ No search query provided"
-            )
+            return self.create_response(success=False, data={}, message="❌ No search query provided")
 
-        self.log_activity(f"🔍 Searching for: '{query}' (scope: {scope}, top_k: {top_k})")
+        if self.index is None or self.meta is None:
+            self._load_indices()
 
+        if not self.index or self.meta is None or self.embedder is None:
+            return self.create_response(success=False, data={}, message="Search is temporarily unavailable. The data may still be processing.")
+
+        self.log_activity(f"🧠 Performing semantic search for: '{query}' (top_k: {top_k})")
         try:
             enhanced_query = await self._enhance_query(query)
-            results = self._mock_search_results(enhanced_query, scope, top_k)
+            self.log_activity(f"✨ Enhanced query: '{enhanced_query}'")
+            query_embedding = self.embedder.encode([enhanced_query], normalize_embeddings=True).astype('float32')
+            distances, indices = self.index.search(query_embedding, top_k)
+
+            raw_results = [self.meta.iloc[idx].to_dict() | {'relevance_score': float(distances[0][i])} for i, idx in enumerate(indices[0]) if idx < len(self.meta)]
+
+            results = []
+            for r in raw_results:
+                cleaned_article = {}
+                for key, value in r.items():
+                    if pd.isna(value):
+                        cleaned_article[key] = None
+                    elif isinstance(value, np.generic):
+                        cleaned_article[key] = value.item()
+                    else:
+                        cleaned_article[key] = value
+                results.append(cleaned_article)
 
             return self.create_response(
                 success=True,
-                data={
-                    "articles": results,
-                    "original_query": query,
-                    "enhanced_query": enhanced_query,
-                    "search_scope": scope,
-                    "total_results": len(results)
-                },
-                message=f"✅ Found {len(results)} relevant articles"
+                data={"articles": results, "original_query": query, "enhanced_query": enhanced_query},
+                message=f"✅ Found {len(results)} relevant articles."
             )
-
         except Exception as e:
-            return self.create_response(
-                success=False,
-                data={"error_details": str(e)},
-                message=f"❌ Search failed: {str(e)}"
-            )
+            self.log_activity(f"❌ Search execution failed: {str(e)}")
+            return self.create_response(success=False, data={"error_details": str(e)}, message=f"❌ Search failed: {str(e)}")
 
     async def _enhance_query(self, query: str) -> str:
-        prompt = f"""Enhance this search query for better news search: "{query}"
-        Add relevant keywords and synonyms. Return only the enhanced query."""
-
+        prompt = f'Rewrite the user\'s news query for a semantic search engine. Focus on keywords and concepts. Query: "{query}"'
+        if not self.llm: return query
         try:
             enhanced = await self._generate_content(prompt)
-            return enhanced.strip() if enhanced else query
-        except:
+            return enhanced.strip().replace('"', '') if enhanced else query
+        except Exception as e:
+            self.log_activity(f"⚠️ Could not enhance query. Error: {e}")
             return query
-
-    def _mock_search_results(self, query: str, scope: str, top_k: int) -> List[Dict]:
-        # Mock results when no real data available
-        mock_articles = [
-            {
-                "title": f"Sample {scope} news article about {query}",
-                "description": f"This is a sample article related to {query}",
-                "source": "Sample News",
-                "relevance_score": 0.95,
-                "source_type": scope
-            }
-        ]
-        return mock_articles[:top_k]

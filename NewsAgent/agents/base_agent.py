@@ -16,26 +16,20 @@ class AgentResponse:
     timestamp: str
 
 class BaseAgent(ABC):
-    def __init__(self, name: str):
+    def __init__(self, name: str, llm_instance=None):
         self.name = name
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-
-        if self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
-            self.llm = genai.GenerativeModel('gemini-1.5-pro')
-            self.log_activity("✅ Agent initialized successfully")
-        else:
-            self.llm = None
-            self.log_activity("⚠️ No Gemini API key")
+        self.llm = llm_instance
+        self.log_activity("✅ Agent initialized.")
 
     @abstractmethod
     async def execute(self, task: Dict[str, Any]) -> AgentResponse:
         pass
 
     async def _generate_content(self, prompt: str) -> str:
-        """Fixed Gemini API call - using asyncio.to_thread"""
+        """Uses the provided LLM instance to generate content."""
         if not self.llm:
-            return "Error: Gemini API not available"
+            self.log_activity("❌ LLM instance not provided to agent.")
+            raise ValueError("LLM instance is not available in the agent.")
 
         try:
             self.log_activity("🤖 Calling Gemini API in thread...")
@@ -45,7 +39,8 @@ class BaseAgent(ABC):
         except Exception as e:
             error_msg = f"Gemini API error: {str(e)}"
             self.log_activity(f"❌ {error_msg}")
-            return error_msg
+            # Re-raise the exception to be handled by the calling agent's try-except block
+            raise e
 
     def log_activity(self, message: str):
         timestamp = datetime.now().strftime("%H:%M:%S")

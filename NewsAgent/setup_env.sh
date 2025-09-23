@@ -4,10 +4,10 @@ echo "🔧 Setting up environment variables"
 echo "=================================="
 
 # Replace these with your actual values
-export PROJECT_ID="your-gcp-project-id"
-export GCS_BUCKET="your-gcs-bucket"
-export GCS_PREFIX="your-gcs-prefix"
-export GEMINI_API_KEY="your-api-key"
+export PROJECT_ID="news-471020"
+export GCS_BUCKET="news-hub"
+export GCS_PREFIX="news_data"
+export GEMINI_API_KEY="api-key"
 export REGION="us-central1"
 
 # Authenticate and set project

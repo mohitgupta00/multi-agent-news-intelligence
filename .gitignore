@@ -17,7 +17,7 @@ venv/
 # Jupyter Notebook
 .ipynb_checkpoints/
 # Uncomment the line below if you don’t want to track notebooks at all
-# *.ipynb
+*.ipynb
 
 # ----------------------
 # Project-generated folders & files

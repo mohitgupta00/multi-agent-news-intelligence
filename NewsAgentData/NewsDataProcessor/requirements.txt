@@ -1,0 +1,11 @@
+pandas
+numpy<2.0
+google-cloud-storage
+transformers
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4
+google-generativeai
+newspaper3k
+beautifulsoup4
+nltk
+huggingface-hub==0.17.3

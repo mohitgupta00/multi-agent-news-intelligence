@@ -1,10 +1,16 @@
 #!/bin/bash
 
 # Configuration
-PROJECT_ID="news-471020"  # Replace with your project ID
+PROJECT_ID="news-471020"
 SERVICE_NAME="news-intelligence-api"
 REGION="us-central1"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+
+# --- Hardcoded environment variables to ensure they are passed to Cloud Run ---
+# This is the most reliable way to fix the environment issue in this context.
+API_KEY="AIzaSyCZELmN8Re-v2eMaVRHROKguyjEYpSU9hY"
+BUCKET_NAME="news-hub"
+DATA_PREFIX="news_data"
 
 echo "🚀 Deploying Multi-Agent News Intelligence to Cloud Run"
 echo "=================================================="
@@ -14,16 +20,14 @@ gcloud config set project $PROJECT_ID
 
 # Enable required APIs
 echo "📋 Enabling required APIs..."
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable run.googleapis.com
-gcloud services enable containerregistry.googleapis.com
+gcloud services enable cloudbuild.googleapis.com run.googleapis.com
 
-# Build Docker image
-echo "🔨 Building Docker image..."
-gcloud builds submit --tag $IMAGE_NAME .
+# Build Docker image with an increased timeout
+echo "🔨 Building Docker image with increased timeout..."
+gcloud builds submit --tag $IMAGE_NAME . --timeout=3600s --machine-type=e2-highcpu-8
 
-# Deploy to Cloud Run
-echo "🚀 Deploying to Cloud Run..."
+# Deploy to Cloud Run with hardcoded environment variables
+echo "🚀 Deploying to Cloud Run with correct configuration..."
 gcloud run deploy $SERVICE_NAME \
   --image $IMAGE_NAME \
   --region $REGION \
@@ -32,10 +36,7 @@ gcloud run deploy $SERVICE_NAME \
   --memory 4Gi \
   --cpu 2 \
   --timeout 900 \
-  --concurrency 100 \
-  --min-instances 1 \
-  --max-instances 10 \
-  --set-env-vars GEMINI_API_KEY=$GEMINI_API_KEY,GCS_BUCKET=$GCS_BUCKET,GCS_PREFIX=$GCS_PREFIX
+  --set-env-vars "GEMINI_API_KEY=${API_KEY},GCS_BUCKET=${BUCKET_NAME},GCS_PREFIX=${DATA_PREFIX}"
 
 # Get service URL
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.url)')
